@@ -1,0 +1,15 @@
+#プログラムの出力データ
+TC-1/output/
+
+# C++のビルドファイル
+*.o
+*.out
+*.exe
+
+# ログファイル
+*.log
+
+# IDE（Visual Studio Codeなど）の設定
+.vscode/
+.idea/
+
