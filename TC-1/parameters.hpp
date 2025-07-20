@@ -1,3 +1,5 @@
+#include <string>
+
 #ifndef PARAMETERS_HPP
 #define PARAMETERS_HPP
 
@@ -17,6 +19,7 @@ struct BodyParameters {
     double max_thrust;
     double min_thrust;
     double average_thrust;
+    double Isp;  // 比推力 [s]
 };
 
 BodyParameters loadBodyParameters(const std::string& filename);
