@@ -110,6 +110,7 @@ int main(int argc, char** argv) {
             }
         }
         hrocket::write_dispersion_csv(out_dir / "dispersion.csv", dispersion);
+        hrocket::write_graph_svgs(out_dir, result, dispersion);
 
         std::cout << "Wrote " << result.points.size() << " trajectory points to " << out_dir.string() << "\n";
         return 0;

@@ -24,5 +24,6 @@ struct DispersionPoint {
 };
 
 void write_dispersion_csv(const std::filesystem::path& path, const std::vector<DispersionPoint>& points);
+void write_graph_svgs(const std::filesystem::path& directory, const SimulationResult& result, const std::vector<DispersionPoint>& dispersion);
 
 } // namespace hrocket

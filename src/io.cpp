@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <map>
@@ -66,6 +67,125 @@ std::pair<double, double> ned_to_lat_lon(double lat0_deg, double lon0_deg, doubl
     const double lat = lat0_deg + (north_m / earth_radius_m) * deg_per_rad;
     const double lon = lon0_deg + (east_m / (earth_radius_m * std::cos(lat0_rad))) * deg_per_rad;
     return {lat, lon};
+}
+
+double speed(const TrajectoryPoint& p) {
+    return norm(p.state.velocity_ned_mps);
+}
+
+double roll_deg(const TrajectoryPoint& p) {
+    const auto q = normalize(p.state.attitude_body_to_ned);
+    return std::atan2(2.0 * (q.w * q.x + q.y * q.z), 1.0 - 2.0 * (q.x * q.x + q.y * q.y)) * 57.29577951308232;
+}
+
+double pitch_deg(const TrajectoryPoint& p) {
+    const auto q = normalize(p.state.attitude_body_to_ned);
+    const double s = std::clamp(2.0 * (q.w * q.y - q.z * q.x), -1.0, 1.0);
+    return std::asin(s) * 57.29577951308232;
+}
+
+double yaw_deg(const TrajectoryPoint& p) {
+    const auto q = normalize(p.state.attitude_body_to_ned);
+    return std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)) * 57.29577951308232;
+}
+
+struct Series {
+    std::string name;
+    std::string color;
+    std::vector<std::pair<double, double>> points;
+};
+
+std::pair<double, double> range_for(const std::vector<Series>& series, bool x_axis) {
+    bool has_value = false;
+    double lo = 0.0;
+    double hi = 1.0;
+    for (const auto& s : series) {
+        for (const auto& p : s.points) {
+            const double v = x_axis ? p.first : p.second;
+            if (!has_value) {
+                lo = hi = v;
+                has_value = true;
+            } else {
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
+            }
+        }
+    }
+    if (std::abs(hi - lo) < 1.0e-9) {
+        hi = lo + 1.0;
+    }
+    const double pad = 0.05 * (hi - lo);
+    return {lo - pad, hi + pad};
+}
+
+void write_line_svg(const std::filesystem::path& path, const std::string& title, const std::string& x_label, const std::string& y_label, const std::vector<Series>& series) {
+    constexpr double width = 1200.0;
+    constexpr double height = 760.0;
+    constexpr double left = 92.0;
+    constexpr double right = 40.0;
+    constexpr double top = 76.0;
+    constexpr double bottom = 92.0;
+    const auto [xmin, xmax] = range_for(series, true);
+    const auto [ymin, ymax] = range_for(series, false);
+    const auto sx = [&](double x) { return left + (x - xmin) / (xmax - xmin) * (width - left - right); };
+    const auto sy = [&](double y) { return height - bottom - (y - ymin) / (ymax - ymin) * (height - top - bottom); };
+
+    std::ofstream out(path);
+    out << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\" viewBox=\"0 0 " << width << ' ' << height << "\">\n";
+    out << "<rect width=\"100%\" height=\"100%\" fill=\"#101418\"/>\n";
+    out << "<rect x=\"" << left << "\" y=\"" << top << "\" width=\"" << width - left - right << "\" height=\"" << height - top - bottom << "\" rx=\"10\" fill=\"#151b22\" stroke=\"#2b3744\"/>\n";
+    out << "<text x=\"40\" y=\"42\" fill=\"#e8eef5\" font-family=\"Segoe UI,Arial\" font-size=\"26\" font-weight=\"700\">" << title << "</text>\n";
+    out << "<text x=\"" << width * 0.5 << "\" y=\"" << height - 28 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"16\" text-anchor=\"middle\">" << x_label << "</text>\n";
+    out << "<text x=\"28\" y=\"" << height * 0.5 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"16\" transform=\"rotate(-90 28 " << height * 0.5 << ")\" text-anchor=\"middle\">" << y_label << "</text>\n";
+
+    for (int i = 0; i <= 6; ++i) {
+        const double x = left + i * (width - left - right) / 6.0;
+        const double y = top + i * (height - top - bottom) / 6.0;
+        out << "<line x1=\"" << x << "\" y1=\"" << top << "\" x2=\"" << x << "\" y2=\"" << height - bottom << "\" stroke=\"#26313c\"/>\n";
+        out << "<line x1=\"" << left << "\" y1=\"" << y << "\" x2=\"" << width - right << "\" y2=\"" << y << "\" stroke=\"#26313c\"/>\n";
+    }
+
+    double legend_x = left + 16.0;
+    for (const auto& s : series) {
+        out << "<polyline fill=\"none\" stroke=\"" << s.color << "\" stroke-width=\"3\" points=\"";
+        for (const auto& p : s.points) {
+            out << sx(p.first) << ',' << sy(p.second) << ' ';
+        }
+        out << "\"/>\n";
+        out << "<rect x=\"" << legend_x << "\" y=\"92\" width=\"18\" height=\"4\" fill=\"" << s.color << "\"/>\n";
+        out << "<text x=\"" << legend_x + 26.0 << "\" y=\"99\" fill=\"#cbd6e2\" font-family=\"Segoe UI,Arial\" font-size=\"14\">" << s.name << "</text>\n";
+        legend_x += 150.0;
+    }
+    out << "</svg>\n";
+}
+
+void write_scatter_svg(const std::filesystem::path& path, const std::vector<DispersionPoint>& points) {
+    std::vector<Series> series{{"impact", "#4fc3f7", {}}};
+    for (const auto& p : points) {
+        series.front().points.push_back({p.impact_east_m, p.impact_north_m});
+    }
+    constexpr double width = 900.0;
+    constexpr double height = 760.0;
+    constexpr double left = 92.0;
+    constexpr double right = 40.0;
+    constexpr double top = 76.0;
+    constexpr double bottom = 92.0;
+    const auto [xmin, xmax] = range_for(series, true);
+    const auto [ymin, ymax] = range_for(series, false);
+    const auto sx = [&](double x) { return left + (x - xmin) / (xmax - xmin) * (width - left - right); };
+    const auto sy = [&](double y) { return height - bottom - (y - ymin) / (ymax - ymin) * (height - top - bottom); };
+
+    std::ofstream out(path);
+    out << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\" viewBox=\"0 0 " << width << ' ' << height << "\">\n";
+    out << "<rect width=\"100%\" height=\"100%\" fill=\"#101418\"/>\n";
+    out << "<rect x=\"" << left << "\" y=\"" << top << "\" width=\"" << width - left - right << "\" height=\"" << height - top - bottom << "\" rx=\"10\" fill=\"#151b22\" stroke=\"#2b3744\"/>\n";
+    out << "<text x=\"40\" y=\"42\" fill=\"#e8eef5\" font-family=\"Segoe UI,Arial\" font-size=\"26\" font-weight=\"700\">Impact Dispersion</text>\n";
+    out << "<text x=\"" << width * 0.5 << "\" y=\"" << height - 28 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"16\" text-anchor=\"middle\">East [m]</text>\n";
+    out << "<text x=\"28\" y=\"" << height * 0.5 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"16\" transform=\"rotate(-90 28 " << height * 0.5 << ")\" text-anchor=\"middle\">North [m]</text>\n";
+    for (const auto& p : points) {
+        out << "<circle cx=\"" << sx(p.impact_east_m) << "\" cy=\"" << sy(p.impact_north_m) << "\" r=\"5\" fill=\"#4fc3f7\" fill-opacity=\"0.75\"/>\n";
+    }
+    out << "</svg>\n";
 }
 
 } // namespace
@@ -176,6 +296,44 @@ void write_dispersion_csv(const std::filesystem::path& path, const std::vector<D
         out << p.run_index << ',' << p.impact_north_m << ',' << p.impact_east_m << ','
             << p.apogee_m << ',' << p.flight_time_s << ',' << (p.impacted ? 1 : 0) << '\n';
     }
+}
+
+void write_graph_svgs(const std::filesystem::path& directory, const SimulationResult& result, const std::vector<DispersionPoint>& dispersion) {
+    std::filesystem::create_directories(directory);
+    std::vector<Series> trajectory{{"Altitude vs downrange", "#4fc3f7", {}}};
+    std::vector<Series> profile{
+        {"Altitude [m]", "#4fc3f7", {}},
+        {"Speed [m/s]", "#ffca28", {}},
+        {"Thrust [N]", "#ef5350", {}},
+    };
+    std::vector<Series> attitude{
+        {"Roll [deg]", "#ffca28", {}},
+        {"Pitch [deg]", "#4fc3f7", {}},
+        {"Yaw [deg]", "#ef5350", {}},
+    };
+    std::vector<Series> velocity{
+        {"North [m/s]", "#4fc3f7", {}},
+        {"East [m/s]", "#ffca28", {}},
+        {"Down [m/s]", "#ef5350", {}},
+    };
+    for (const auto& p : result.points) {
+        const double downrange = std::sqrt(p.state.position_ned_m.x * p.state.position_ned_m.x + p.state.position_ned_m.y * p.state.position_ned_m.y);
+        trajectory[0].points.push_back({downrange, p.altitude_m});
+        profile[0].points.push_back({p.state.t_s, p.altitude_m});
+        profile[1].points.push_back({p.state.t_s, speed(p)});
+        profile[2].points.push_back({p.state.t_s, p.thrust_n});
+        attitude[0].points.push_back({p.state.t_s, roll_deg(p)});
+        attitude[1].points.push_back({p.state.t_s, pitch_deg(p)});
+        attitude[2].points.push_back({p.state.t_s, yaw_deg(p)});
+        velocity[0].points.push_back({p.state.t_s, p.state.velocity_ned_mps.x});
+        velocity[1].points.push_back({p.state.t_s, p.state.velocity_ned_mps.y});
+        velocity[2].points.push_back({p.state.t_s, p.state.velocity_ned_mps.z});
+    }
+    write_line_svg(directory / "graph_trajectory.svg", "Trajectory", "Downrange [m]", "Altitude [m]", trajectory);
+    write_line_svg(directory / "graph_profile.svg", "Altitude / Speed / Thrust", "Time [s]", "Value", profile);
+    write_line_svg(directory / "graph_attitude.svg", "Attitude", "Time [s]", "Angle [deg]", attitude);
+    write_line_svg(directory / "graph_velocity.svg", "Velocity", "Time [s]", "Velocity [m/s]", velocity);
+    write_scatter_svg(directory / "graph_dispersion.svg", dispersion);
 }
 
 } // namespace hrocket
