@@ -21,8 +21,7 @@ struct Derivative {
 struct ControlOutput {
     Vec3 force_body_n;
     Vec3 moment_body_nm;
-    double pitch_deflection_rad{};
-    double yaw_deflection_rad{};
+    double deflection_rad{};
 };
 
 State add_scaled(State s, const Derivative& d, double h) {
@@ -59,21 +58,18 @@ ControlOutput compute_twin_tail_control(const SimulationInputs& in, const State&
     }
 
     const double max_deflection = in.vehicle.control_max_deflection_deg * deg_to_rad;
-    const double pitch_error = (in.vehicle.control_target_pitch_deg - pitch_deg(s.attitude_body_to_ned)) * deg_to_rad;
-    const double yaw_error = (in.vehicle.control_target_yaw_deg - yaw_deg(s.attitude_body_to_ned)) * deg_to_rad;
-    out.pitch_deflection_rad = clamp(
-        in.vehicle.control_pitch_kp * pitch_error - in.vehicle.control_pitch_kd * s.omega_body_radps.y,
-        -max_deflection,
-        max_deflection);
-    out.yaw_deflection_rad = clamp(
-        in.vehicle.control_yaw_kp * yaw_error - in.vehicle.control_yaw_kd * s.omega_body_radps.z,
+    const bool yaw_axis = in.vehicle.control_axis >= 0.5;
+    const double angle_deg = yaw_axis ? yaw_deg(s.attitude_body_to_ned) : pitch_deg(s.attitude_body_to_ned);
+    const double rate_radps = yaw_axis ? s.omega_body_radps.z : s.omega_body_radps.y;
+    const double angle_error = (in.vehicle.control_target_angle_deg - angle_deg) * deg_to_rad;
+    out.deflection_rad = clamp(
+        in.vehicle.control_kp * angle_error - in.vehicle.control_kd * rate_radps,
         -max_deflection,
         max_deflection);
 
-    const double fin_gain = q_dynamic * in.vehicle.control_tail_area_m2 * in.vehicle.control_tail_lift_slope_per_rad;
-    const Vec3 pitch_force{0.0, 0.0, fin_gain * out.pitch_deflection_rad};
-    const Vec3 yaw_force{0.0, fin_gain * out.yaw_deflection_rad, 0.0};
-    out.force_body_n = pitch_force + yaw_force;
+    const double total_area = 2.0 * in.vehicle.control_tail_area_m2;
+    const double fin_force = q_dynamic * total_area * in.vehicle.control_tail_lift_slope_per_rad * out.deflection_rad;
+    out.force_body_n = yaw_axis ? Vec3{0.0, fin_force, 0.0} : Vec3{0.0, 0.0, fin_force};
     const Vec3 arm{in.vehicle.cg_from_nose_m - in.vehicle.control_tail_distance_from_nose_m, 0.0, 0.0};
     out.moment_body_nm = cross(arm, out.force_body_n);
     return out;
@@ -178,8 +174,7 @@ SimulationResult run_simulation(const SimulationInputs& inputs) {
             inputs.thrust.value_at(state.t_s),
             wind,
             barrow.cp_from_nose_m,
-            control.pitch_deflection_rad / deg_to_rad,
-            control.yaw_deflection_rad / deg_to_rad,
+            control.deflection_rad / deg_to_rad,
             control.moment_body_nm,
         });
         if (state.t_s > 0.5 && state.position_ned_m.z >= 0.0 && state.velocity_ned_mps.z > 0.0) {

@@ -343,11 +343,10 @@ std::vector<PlotSeries> build_series(int graph_index) {
             series[2].points.push_back({p.state.t_s, p.state.velocity_ned_mps.z});
         }
     } else if (graph_index == 4) {
-        series = {{accent_blue, {}}, {accent_yellow, {}}, {accent_red, {}}};
+        series = {{accent_blue, {}}, {accent_red, {}}};
         for (const auto& p : last_result.points) {
-            series[0].points.push_back({p.state.t_s, p.control_pitch_deflection_deg});
-            series[1].points.push_back({p.state.t_s, p.control_yaw_deflection_deg});
-            series[2].points.push_back({p.state.t_s, hrocket::norm(p.control_moment_body_nm)});
+            series[0].points.push_back({p.state.t_s, p.control_deflection_deg});
+            series[1].points.push_back({p.state.t_s, hrocket::norm(p.control_moment_body_nm)});
         }
     }
     return series;

@@ -96,23 +96,21 @@ SVGグラフには軸目盛りと数値ラベルが含まれます。
 `samples/vehicle.csv` を参照してください。基本形式は `key,value` です。
 パラシュート諸元も同じCSVに `parachute_area_m2`、`parachute_cd`、`parachute_deploy_altitude_m` として入力します。
 
-2枚可動尾翼による姿勢制御も同じCSVで設定します。初期実装では1枚をpitch制御、もう1枚をyaw制御の空力舵として扱い、ランチャ離脱後かつ指定対気速度以上でPD制御を有効にします。
-設定例は `samples/vehicle_control.csv` です。
+2枚可動尾翼による姿勢制御も同じCSVで設定します。`reference/control_model.jpg` のように機軸に対して対称に取り付けられた2枚翼を想定し、2枚を同じ舵角で動かして1軸の姿勢モーメントを発生させます。ランチャ離脱後かつ指定対気速度以上でPD制御を有効にします。
+設定例は `samples/vehicle_control_symmetric.csv` です。
 
 主な設定項目:
 
 - `control_enabled`
+- `control_axis` (`0`: pitch軸, `1`: yaw軸)
 - `control_tail_area_m2`
 - `control_tail_lift_slope_per_rad`
 - `control_tail_distance_from_nose_m`
 - `control_max_deflection_deg`
 - `control_min_speed_mps`
-- `control_target_pitch_deg`
-- `control_target_yaw_deg`
-- `control_pitch_kp`
-- `control_pitch_kd`
-- `control_yaw_kp`
-- `control_yaw_kd`
+- `control_target_angle_deg`
+- `control_kp`
+- `control_kd`
 
 ### 推力履歴
 
