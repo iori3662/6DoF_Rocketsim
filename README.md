@@ -1,0 +1,84 @@
+# Hybrid Rocket 6DoF Simulator
+
+ハイブリッドロケット向けのローカル実行型6自由度シミュレータです。C++20/CMakeで実装し、WindowsではGUI、全環境でCLIを提供します。
+
+## 現在できること
+
+- 手入力CSVの機体モデル読み込み
+- 推力履歴CSV読み込み
+- 風モデルCSV読み込み
+- Barrowman methodによる風圧中心の概算
+- 6DoF状態量のRK4積分
+- 軌道CSV出力
+- Google Earth向けKML出力
+- WindowsローカルGUI
+- GitHub Actionsでビルド・テスト・成果物作成
+
+## ビルド
+
+```powershell
+cmake -S . -B build
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+MinGW環境でCMake/Makeが日本語パスを扱えない場合は、ローカル用スクリプトを使えます。
+
+```powershell
+.\scripts\build_mingw.ps1
+```
+
+## CLI実行例
+
+```powershell
+.\build\Release\hrocket_cli.exe --vehicle samples\vehicle.csv --thrust samples\thrust.csv --wind samples\wind.csv --out out
+```
+
+落下分散を出したい場合:
+
+```powershell
+.\build\Release\hrocket_cli.exe --vehicle samples\vehicle.csv --thrust samples\thrust.csv --wind samples\wind.csv --out out --descent parachute --wind-mode nominal --dispersion 100 --wind-sigma 2.0 --seed 42
+```
+
+降下方式は `--descent freefall` または `--descent parachute`、風は `--wind-mode nominal` または `--wind-mode calm` を選択できます。
+
+出力:
+
+- `out\trajectory.csv`
+- `out\trajectory.kml`
+- `out\summary.csv`
+- `out\dispersion.csv`
+
+## GUI
+
+Windowsでは `hrocket_gui.exe` を起動し、機体・推力・風CSVと出力フォルダを指定して実行します。
+
+## 入力CSV
+
+### 機体モデル
+
+`samples/vehicle.csv` を参照してください。基本形式は `key,value` です。
+パラシュート諸元も同じCSVに `parachute_area_m2`、`parachute_cd`、`parachute_deploy_altitude_m` として入力します。
+
+### 推力履歴
+
+```csv
+time_s,thrust_n
+0,0
+0.1,1200
+```
+
+### 風モデル
+
+```csv
+altitude_m,wind_north_mps,wind_east_mps,wind_down_mps
+0,0,0,0
+1000,5,1,0
+```
+
+## 今後の拡張候補
+
+- Monte Carlo落下分散
+- 制御器・アクチュエータのGUI設定
+- 詳細な空力係数テーブル
+- 地球楕円体/ENU/NED変換の高精度化

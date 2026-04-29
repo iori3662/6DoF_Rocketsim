@@ -1,0 +1,65 @@
+name: build-test-package
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        run: cmake --install build --prefix dist --config Release
+        continue-on-error: true
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p artifact
+          cp README.md artifact/
+          cp -r samples artifact/
+          find build -type f \( -name 'hrocket_cli*' -o -name 'hrocket_gui*' \) -exec cp {} artifact/ \;
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hrocket-${{ matrix.os }}
+          path: artifact
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Archive artifacts
+        run: |
+          cd release-artifacts
+          for d in */; do zip -r "../${d%/}.zip" "$d"; done
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.zip'
+
