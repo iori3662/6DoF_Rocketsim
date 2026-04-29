@@ -53,7 +53,7 @@ FROGS型の風速・風向スイープで落下分散を見る場合:
 出力:
 
 - `out\trajectory.csv`
-- `out\trajectory.kml`
+- `out\trajectory.kml` は太線の軌道と落下分散点を含み、Google Earthで表示できます。
 - `out\summary.csv`
 - `out\dispersion.csv`
 - `out\graph_trajectory.svg`
@@ -85,6 +85,7 @@ GUIでは以下を選択できます。
 - 落下分散
 
 同じグラフはSVGとして出力フォルダにも保存されます。
+SVGグラフには軸目盛りと数値ラベルが含まれます。
 
 ## 入力CSV
 

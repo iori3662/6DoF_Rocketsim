@@ -194,6 +194,19 @@ double speed(const hrocket::TrajectoryPoint& p) {
     return hrocket::norm(p.state.velocity_ned_mps);
 }
 
+std::wstring format_axis(double value) {
+    wchar_t buffer[64]{};
+    const double a = std::abs(value);
+    if (a >= 100.0) {
+        swprintf(buffer, 64, L"%.0f", value);
+    } else if (a >= 10.0) {
+        swprintf(buffer, 64, L"%.1f", value);
+    } else {
+        swprintf(buffer, 64, L"%.2f", value);
+    }
+    return buffer;
+}
+
 double roll_deg(const hrocket::TrajectoryPoint& p) {
     const auto q = hrocket::normalize(p.state.attitude_body_to_ned);
     return std::atan2(2.0 * (q.w * q.x + q.y * q.z), 1.0 - 2.0 * (q.x * q.x + q.y * q.y)) * 57.29577951308232;
@@ -222,10 +235,18 @@ void draw_line_plot(HDC dc, RECT area, const std::vector<PlotSeries>& series) {
     for (int i = 0; i <= 5; ++i) {
         const int x = plot.left + i * (plot.right - plot.left) / 5;
         const int y = plot.top + i * (plot.bottom - plot.top) / 5;
+        const double xv = xmin + i * (xmax - xmin) / 5.0;
+        const double yv = ymax - i * (ymax - ymin) / 5.0;
         MoveToEx(dc, x, plot.top, nullptr);
         LineTo(dc, x, plot.bottom);
         MoveToEx(dc, plot.left, y, nullptr);
         LineTo(dc, plot.right, y);
+        RECT x_label{x - 32, plot.bottom + 8, x + 32, plot.bottom + 28};
+        const auto xs = format_axis(xv);
+        draw_text(dc, xs.c_str(), x_label, muted_color, ui_font, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        RECT y_label{area.left + 6, y - 10, plot.left - 8, y + 10};
+        const auto ys = format_axis(yv);
+        draw_text(dc, ys.c_str(), y_label, muted_color, ui_font, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
     }
     SelectObject(dc, old_pen);
     DeleteObject(grid_pen);
@@ -256,6 +277,27 @@ void draw_dispersion_plot(HDC dc, RECT area) {
     const auto [ymin, ymax] = range_for(series, false);
     const auto sx = [&](double x) { return plot.left + static_cast<int>((x - xmin) / (xmax - xmin) * (plot.right - plot.left)); };
     const auto sy = [&](double y) { return plot.bottom - static_cast<int>((y - ymin) / (ymax - ymin) * (plot.bottom - plot.top)); };
+
+    HPEN grid_pen = CreatePen(PS_SOLID, 1, RGB(38, 49, 60));
+    HGDIOBJ old_pen = SelectObject(dc, grid_pen);
+    for (int i = 0; i <= 5; ++i) {
+        const int x = plot.left + i * (plot.right - plot.left) / 5;
+        const int y = plot.top + i * (plot.bottom - plot.top) / 5;
+        const double xv = xmin + i * (xmax - xmin) / 5.0;
+        const double yv = ymax - i * (ymax - ymin) / 5.0;
+        MoveToEx(dc, x, plot.top, nullptr);
+        LineTo(dc, x, plot.bottom);
+        MoveToEx(dc, plot.left, y, nullptr);
+        LineTo(dc, plot.right, y);
+        RECT x_label{x - 32, plot.bottom + 8, x + 32, plot.bottom + 28};
+        const auto xs = format_axis(xv);
+        draw_text(dc, xs.c_str(), x_label, muted_color, ui_font, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        RECT y_label{area.left + 6, y - 10, plot.left - 8, y + 10};
+        const auto ys = format_axis(yv);
+        draw_text(dc, ys.c_str(), y_label, muted_color, ui_font, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    }
+    SelectObject(dc, old_pen);
+    DeleteObject(grid_pen);
 
     HBRUSH brush = CreateSolidBrush(accent_blue);
     HGDIOBJ old_brush = SelectObject(dc, brush);
@@ -354,7 +396,7 @@ void run(HWND owner) {
         last_dispersion = hrocket::run_dispersion(inputs, last_result, dispersion_config);
 
         hrocket::write_trajectory_csv(out_dir / "trajectory.csv", last_result, inputs.vehicle);
-        hrocket::write_kml(out_dir / "trajectory.kml", last_result, inputs.vehicle);
+        hrocket::write_kml(out_dir / "trajectory.kml", last_result, inputs.vehicle, last_dispersion);
         hrocket::write_summary_csv(out_dir / "summary.csv", last_result);
         hrocket::write_dispersion_csv(out_dir / "dispersion.csv", last_dispersion);
         hrocket::write_graph_svgs(out_dir, last_result, last_dispersion);

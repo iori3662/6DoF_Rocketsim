@@ -8,6 +8,7 @@
 #include <map>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 namespace hrocket {
 namespace {
@@ -118,6 +119,21 @@ std::pair<double, double> range_for(const std::vector<Series>& series, bool x_ax
     return {lo - pad, hi + pad};
 }
 
+std::string fmt(double value) {
+    std::ostringstream ss;
+    const double a = std::abs(value);
+    if ((a >= 10000.0 || (a > 0.0 && a < 0.01))) {
+        ss << std::scientific << std::setprecision(2) << value;
+    } else if (a >= 100.0) {
+        ss << std::fixed << std::setprecision(0) << value;
+    } else if (a >= 10.0) {
+        ss << std::fixed << std::setprecision(1) << value;
+    } else {
+        ss << std::fixed << std::setprecision(2) << value;
+    }
+    return ss.str();
+}
+
 void write_line_svg(const std::filesystem::path& path, const std::string& title, const std::string& x_label, const std::string& y_label, const std::vector<Series>& series) {
     constexpr double width = 1200.0;
     constexpr double height = 760.0;
@@ -141,8 +157,12 @@ void write_line_svg(const std::filesystem::path& path, const std::string& title,
     for (int i = 0; i <= 6; ++i) {
         const double x = left + i * (width - left - right) / 6.0;
         const double y = top + i * (height - top - bottom) / 6.0;
+        const double xv = xmin + i * (xmax - xmin) / 6.0;
+        const double yv = ymax - i * (ymax - ymin) / 6.0;
         out << "<line x1=\"" << x << "\" y1=\"" << top << "\" x2=\"" << x << "\" y2=\"" << height - bottom << "\" stroke=\"#26313c\"/>\n";
         out << "<line x1=\"" << left << "\" y1=\"" << y << "\" x2=\"" << width - right << "\" y2=\"" << y << "\" stroke=\"#26313c\"/>\n";
+        out << "<text x=\"" << x << "\" y=\"" << height - bottom + 24 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"13\" text-anchor=\"middle\">" << fmt(xv) << "</text>\n";
+        out << "<text x=\"" << left - 12 << "\" y=\"" << y + 5 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"13\" text-anchor=\"end\">" << fmt(yv) << "</text>\n";
     }
 
     double legend_x = left + 16.0;
@@ -182,6 +202,16 @@ void write_scatter_svg(const std::filesystem::path& path, const std::vector<Disp
     out << "<text x=\"40\" y=\"42\" fill=\"#e8eef5\" font-family=\"Segoe UI,Arial\" font-size=\"26\" font-weight=\"700\">Impact Dispersion</text>\n";
     out << "<text x=\"" << width * 0.5 << "\" y=\"" << height - 28 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"16\" text-anchor=\"middle\">East [m]</text>\n";
     out << "<text x=\"28\" y=\"" << height * 0.5 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"16\" transform=\"rotate(-90 28 " << height * 0.5 << ")\" text-anchor=\"middle\">North [m]</text>\n";
+    for (int i = 0; i <= 6; ++i) {
+        const double x = left + i * (width - left - right) / 6.0;
+        const double y = top + i * (height - top - bottom) / 6.0;
+        const double xv = xmin + i * (xmax - xmin) / 6.0;
+        const double yv = ymax - i * (ymax - ymin) / 6.0;
+        out << "<line x1=\"" << x << "\" y1=\"" << top << "\" x2=\"" << x << "\" y2=\"" << height - bottom << "\" stroke=\"#26313c\"/>\n";
+        out << "<line x1=\"" << left << "\" y1=\"" << y << "\" x2=\"" << width - right << "\" y2=\"" << y << "\" stroke=\"#26313c\"/>\n";
+        out << "<text x=\"" << x << "\" y=\"" << height - bottom + 24 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"13\" text-anchor=\"middle\">" << fmt(xv) << "</text>\n";
+        out << "<text x=\"" << left - 12 << "\" y=\"" << y + 5 << "\" fill=\"#9fb0c0\" font-family=\"Segoe UI,Arial\" font-size=\"13\" text-anchor=\"end\">" << fmt(yv) << "</text>\n";
+    }
     for (const auto& p : points) {
         out << "<circle cx=\"" << sx(p.impact_east_m) << "\" cy=\"" << sy(p.impact_north_m) << "\" r=\"5\" fill=\"#4fc3f7\" fill-opacity=\"0.75\"/>\n";
     }
@@ -260,16 +290,30 @@ void write_trajectory_csv(const std::filesystem::path& path, const SimulationRes
     }
 }
 
-void write_kml(const std::filesystem::path& path, const SimulationResult& result, const VehicleModel& vehicle) {
+void write_kml(const std::filesystem::path& path, const SimulationResult& result, const VehicleModel& vehicle, const std::vector<DispersionPoint>& dispersion) {
     std::ofstream out(path);
     out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    out << "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><name>Hybrid Rocket Trajectory</name><Placemark><LineString><altitudeMode>absolute</altitudeMode><coordinates>\n";
+    out << "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><name>Hybrid Rocket Simulation</name>\n";
+    out << "<Style id=\"trajectoryStyle\"><LineStyle><color>ff00c8ff</color><width>5</width></LineStyle></Style>\n";
+    out << "<Style id=\"dispersionStyle\"><IconStyle><scale>1.1</scale><color>ff4fc3f7</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon></IconStyle><LabelStyle><scale>0.65</scale></LabelStyle></Style>\n";
+    out << "<Placemark><name>Trajectory</name><styleUrl>#trajectoryStyle</styleUrl><LineString><tessellate>1</tessellate><altitudeMode>absolute</altitudeMode><coordinates>\n";
     out << std::setprecision(10);
     for (const auto& p : result.points) {
         const auto [lat, lon] = ned_to_lat_lon(vehicle.launch_lat_deg, vehicle.launch_lon_deg, p.state.position_ned_m.x, p.state.position_ned_m.y);
         out << lon << ',' << lat << ',' << vehicle.launch_alt_m + p.altitude_m << '\n';
     }
-    out << "</coordinates></LineString></Placemark></Document></kml>\n";
+    out << "</coordinates></LineString></Placemark>\n";
+    out << "<Folder><name>Impact dispersion</name>\n";
+    for (const auto& p : dispersion) {
+        const auto [lat, lon] = ned_to_lat_lon(vehicle.launch_lat_deg, vehicle.launch_lon_deg, p.impact_north_m, p.impact_east_m);
+        out << "<Placemark><name>Run " << p.run_index << "</name><styleUrl>#dispersionStyle</styleUrl>";
+        out << "<description><![CDATA[wind_speed_mps=" << p.wind_speed_mps
+            << "<br/>wind_direction_deg=" << p.wind_direction_deg
+            << "<br/>apogee_m=" << p.apogee_m
+            << "<br/>flight_time_s=" << p.flight_time_s << "]]></description>";
+        out << "<Point><altitudeMode>absolute</altitudeMode><coordinates>" << lon << ',' << lat << ',' << vehicle.launch_alt_m << "</coordinates></Point></Placemark>\n";
+    }
+    out << "</Folder></Document></kml>\n";
 }
 
 void write_summary_csv(const std::filesystem::path& path, const SimulationResult& result) {

@@ -88,10 +88,10 @@ int main(int argc, char** argv) {
 
         std::filesystem::create_directories(out_dir);
         const auto result = hrocket::run_simulation(inputs);
-        hrocket::write_trajectory_csv(out_dir / "trajectory.csv", result, inputs.vehicle);
-        hrocket::write_kml(out_dir / "trajectory.kml", result, inputs.vehicle);
-        hrocket::write_summary_csv(out_dir / "summary.csv", result);
         const auto dispersion = hrocket::run_dispersion(inputs, result, dispersion_config);
+        hrocket::write_trajectory_csv(out_dir / "trajectory.csv", result, inputs.vehicle);
+        hrocket::write_kml(out_dir / "trajectory.kml", result, inputs.vehicle, dispersion);
+        hrocket::write_summary_csv(out_dir / "summary.csv", result);
         hrocket::write_dispersion_csv(out_dir / "dispersion.csv", dispersion);
         hrocket::write_graph_svgs(out_dir, result, dispersion);
 
