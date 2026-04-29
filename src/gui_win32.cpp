@@ -342,6 +342,13 @@ std::vector<PlotSeries> build_series(int graph_index) {
             series[1].points.push_back({p.state.t_s, p.state.velocity_ned_mps.y});
             series[2].points.push_back({p.state.t_s, p.state.velocity_ned_mps.z});
         }
+    } else if (graph_index == 4) {
+        series = {{accent_blue, {}}, {accent_yellow, {}}, {accent_red, {}}};
+        for (const auto& p : last_result.points) {
+            series[0].points.push_back({p.state.t_s, p.control_pitch_deflection_deg});
+            series[1].points.push_back({p.state.t_s, p.control_yaw_deflection_deg});
+            series[2].points.push_back({p.state.t_s, hrocket::norm(p.control_moment_body_nm)});
+        }
     }
     return series;
 }
@@ -349,7 +356,7 @@ std::vector<PlotSeries> build_series(int graph_index) {
 void draw_graph(HDC dc, RECT area) {
     RECT title{area.left, area.top, area.right, area.top + 28};
     const int graph_index = static_cast<int>(SendMessageW(graph_combo, CB_GETCURSEL, 0, 0));
-    const wchar_t* titles[] = {L"Trajectory", L"Altitude / Speed / Thrust", L"Attitude", L"Velocity", L"Impact Dispersion"};
+    const wchar_t* titles[] = {L"Trajectory", L"Altitude / Speed / Thrust", L"Attitude", L"Velocity", L"Twin Tail Control", L"Impact Dispersion"};
     draw_text(dc, titles[std::max(0, graph_index)], title, text_color, title_font);
     RECT plot{area.left, area.top + 42, area.right, area.bottom};
     if (!has_result) {
@@ -358,7 +365,7 @@ void draw_graph(HDC dc, RECT area) {
         draw_text(dc, L"Run a simulation to draw graphs.", msg, muted_color, ui_font);
         return;
     }
-    if (graph_index == 4) {
+    if (graph_index == 5) {
         draw_dispersion_plot(dc, plot);
     } else {
         draw_line_plot(dc, plot, build_series(graph_index));
@@ -473,6 +480,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SendMessageW(graph_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Altitude / Speed / Thrust"));
         SendMessageW(graph_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Attitude"));
         SendMessageW(graph_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Velocity"));
+        SendMessageW(graph_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Twin Tail Control"));
         SendMessageW(graph_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Impact Dispersion"));
         SendMessageW(graph_combo, CB_SETCURSEL, 0, 0);
 

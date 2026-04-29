@@ -252,6 +252,18 @@ VehicleModel load_vehicle_csv(const std::filesystem::path& path) {
     v.parachute_area_m2 = get(values, "parachute_area_m2", v.parachute_area_m2);
     v.parachute_cd = get(values, "parachute_cd", v.parachute_cd);
     v.parachute_deploy_altitude_m = get(values, "parachute_deploy_altitude_m", v.parachute_deploy_altitude_m);
+    v.control_enabled = get(values, "control_enabled", v.control_enabled);
+    v.control_tail_area_m2 = get(values, "control_tail_area_m2", v.control_tail_area_m2);
+    v.control_tail_lift_slope_per_rad = get(values, "control_tail_lift_slope_per_rad", v.control_tail_lift_slope_per_rad);
+    v.control_tail_distance_from_nose_m = get(values, "control_tail_distance_from_nose_m", v.control_tail_distance_from_nose_m);
+    v.control_max_deflection_deg = get(values, "control_max_deflection_deg", v.control_max_deflection_deg);
+    v.control_min_speed_mps = get(values, "control_min_speed_mps", v.control_min_speed_mps);
+    v.control_target_pitch_deg = get(values, "control_target_pitch_deg", v.control_target_pitch_deg);
+    v.control_target_yaw_deg = get(values, "control_target_yaw_deg", v.control_target_yaw_deg);
+    v.control_pitch_kp = get(values, "control_pitch_kp", v.control_pitch_kp);
+    v.control_pitch_kd = get(values, "control_pitch_kd", v.control_pitch_kd);
+    v.control_yaw_kp = get(values, "control_yaw_kp", v.control_yaw_kp);
+    v.control_yaw_kd = get(values, "control_yaw_kd", v.control_yaw_kd);
     return v;
 }
 
@@ -279,14 +291,16 @@ WindProfile load_wind_csv(const std::filesystem::path& path) {
 
 void write_trajectory_csv(const std::filesystem::path& path, const SimulationResult& result, const VehicleModel& vehicle) {
     std::ofstream out(path);
-    out << "time_s,north_m,east_m,down_m,altitude_m,lat_deg,lon_deg,alt_m,vn_mps,ve_mps,vd_mps,thrust_n,wind_n_mps,wind_e_mps,wind_d_mps,cp_from_nose_m\n";
+    out << "time_s,north_m,east_m,down_m,altitude_m,lat_deg,lon_deg,alt_m,vn_mps,ve_mps,vd_mps,thrust_n,wind_n_mps,wind_e_mps,wind_d_mps,cp_from_nose_m,control_pitch_deflection_deg,control_yaw_deflection_deg,control_moment_x_nm,control_moment_y_nm,control_moment_z_nm\n";
     out << std::setprecision(10);
     for (const auto& p : result.points) {
         const auto [lat, lon] = ned_to_lat_lon(vehicle.launch_lat_deg, vehicle.launch_lon_deg, p.state.position_ned_m.x, p.state.position_ned_m.y);
         out << p.state.t_s << ',' << p.state.position_ned_m.x << ',' << p.state.position_ned_m.y << ',' << p.state.position_ned_m.z << ','
             << p.altitude_m << ',' << lat << ',' << lon << ',' << vehicle.launch_alt_m + p.altitude_m << ','
             << p.state.velocity_ned_mps.x << ',' << p.state.velocity_ned_mps.y << ',' << p.state.velocity_ned_mps.z << ','
-            << p.thrust_n << ',' << p.wind_ned_mps.x << ',' << p.wind_ned_mps.y << ',' << p.wind_ned_mps.z << ',' << p.cp_from_nose_m << '\n';
+            << p.thrust_n << ',' << p.wind_ned_mps.x << ',' << p.wind_ned_mps.y << ',' << p.wind_ned_mps.z << ',' << p.cp_from_nose_m << ','
+            << p.control_pitch_deflection_deg << ',' << p.control_yaw_deflection_deg << ','
+            << p.control_moment_body_nm.x << ',' << p.control_moment_body_nm.y << ',' << p.control_moment_body_nm.z << '\n';
     }
 }
 
@@ -362,6 +376,11 @@ void write_graph_svgs(const std::filesystem::path& directory, const SimulationRe
         {"East [m/s]", "#ffca28", {}},
         {"Down [m/s]", "#ef5350", {}},
     };
+    std::vector<Series> control{
+        {"Pitch fin [deg]", "#4fc3f7", {}},
+        {"Yaw fin [deg]", "#ffca28", {}},
+        {"Control moment [Nm]", "#ef5350", {}},
+    };
     for (const auto& p : result.points) {
         const double downrange = std::sqrt(p.state.position_ned_m.x * p.state.position_ned_m.x + p.state.position_ned_m.y * p.state.position_ned_m.y);
         trajectory[0].points.push_back({downrange, p.altitude_m});
@@ -374,11 +393,15 @@ void write_graph_svgs(const std::filesystem::path& directory, const SimulationRe
         velocity[0].points.push_back({p.state.t_s, p.state.velocity_ned_mps.x});
         velocity[1].points.push_back({p.state.t_s, p.state.velocity_ned_mps.y});
         velocity[2].points.push_back({p.state.t_s, p.state.velocity_ned_mps.z});
+        control[0].points.push_back({p.state.t_s, p.control_pitch_deflection_deg});
+        control[1].points.push_back({p.state.t_s, p.control_yaw_deflection_deg});
+        control[2].points.push_back({p.state.t_s, norm(p.control_moment_body_nm)});
     }
     write_line_svg(directory / "graph_trajectory.svg", "Trajectory", "Downrange [m]", "Altitude [m]", trajectory);
     write_line_svg(directory / "graph_profile.svg", "Altitude / Speed / Thrust", "Time [s]", "Value", profile);
     write_line_svg(directory / "graph_attitude.svg", "Attitude", "Time [s]", "Angle [deg]", attitude);
     write_line_svg(directory / "graph_velocity.svg", "Velocity", "Time [s]", "Velocity [m/s]", velocity);
+    write_line_svg(directory / "graph_control.svg", "Twin Tail Control", "Time [s]", "Command / Moment", control);
     write_scatter_svg(directory / "graph_dispersion.svg", dispersion);
 }
 

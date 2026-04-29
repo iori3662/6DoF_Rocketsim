@@ -60,6 +60,7 @@ FROGS型の風速・風向スイープで落下分散を見る場合:
 - `out\graph_profile.svg`
 - `out\graph_attitude.svg`
 - `out\graph_velocity.svg`
+- `out\graph_control.svg`
 - `out\graph_dispersion.svg`
 
 ## GUI
@@ -82,6 +83,7 @@ GUIでは以下を選択できます。
 - 高度 / 速度 / 推力
 - 姿勢
 - 速度成分
+- 2枚可動尾翼制御
 - 落下分散
 
 同じグラフはSVGとして出力フォルダにも保存されます。
@@ -93,6 +95,24 @@ SVGグラフには軸目盛りと数値ラベルが含まれます。
 
 `samples/vehicle.csv` を参照してください。基本形式は `key,value` です。
 パラシュート諸元も同じCSVに `parachute_area_m2`、`parachute_cd`、`parachute_deploy_altitude_m` として入力します。
+
+2枚可動尾翼による姿勢制御も同じCSVで設定します。初期実装では1枚をpitch制御、もう1枚をyaw制御の空力舵として扱い、ランチャ離脱後かつ指定対気速度以上でPD制御を有効にします。
+設定例は `samples/vehicle_control.csv` です。
+
+主な設定項目:
+
+- `control_enabled`
+- `control_tail_area_m2`
+- `control_tail_lift_slope_per_rad`
+- `control_tail_distance_from_nose_m`
+- `control_max_deflection_deg`
+- `control_min_speed_mps`
+- `control_target_pitch_deg`
+- `control_target_yaw_deg`
+- `control_pitch_kp`
+- `control_pitch_kd`
+- `control_yaw_kp`
+- `control_yaw_kd`
 
 ### 推力履歴
 

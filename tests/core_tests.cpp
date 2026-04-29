@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <iostream>
 
 int main() {
@@ -31,6 +32,18 @@ int main() {
     const auto parachute_result = hrocket::run_simulation(inputs);
     assert(!parachute_result.points.empty());
     assert(parachute_result.points.back().state.t_s >= result.points.back().state.t_s);
+
+    inputs.vehicle.control_enabled = 1.0;
+    inputs.vehicle.control_target_pitch_deg = 0.0;
+    inputs.vehicle.control_target_yaw_deg = 0.0;
+    const auto controlled_result = hrocket::run_simulation(inputs);
+    bool saw_control = false;
+    for (const auto& p : controlled_result.points) {
+        saw_control = saw_control || std::abs(p.control_pitch_deflection_deg) > 0.0 || std::abs(p.control_yaw_deflection_deg) > 0.0;
+        assert(std::abs(p.control_pitch_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+        assert(std::abs(p.control_yaw_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+    }
+    assert(saw_control);
     std::cout << "ok\n";
     return 0;
 }

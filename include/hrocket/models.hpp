@@ -31,6 +31,18 @@ struct VehicleModel {
     double parachute_area_m2{1.0};
     double parachute_cd{1.5};
     double parachute_deploy_altitude_m{300.0};
+    double control_enabled{0.0};
+    double control_tail_area_m2{0.003};
+    double control_tail_lift_slope_per_rad{6.0};
+    double control_tail_distance_from_nose_m{1.35};
+    double control_max_deflection_deg{15.0};
+    double control_min_speed_mps{20.0};
+    double control_target_pitch_deg{0.0};
+    double control_target_yaw_deg{0.0};
+    double control_pitch_kp{0.4};
+    double control_pitch_kd{0.08};
+    double control_yaw_kp{0.4};
+    double control_yaw_kd{0.08};
 };
 
 struct TimeSample {
@@ -85,6 +97,9 @@ struct TrajectoryPoint {
     double thrust_n{};
     Vec3 wind_ned_mps{};
     double cp_from_nose_m{};
+    double control_pitch_deflection_deg{};
+    double control_yaw_deflection_deg{};
+    Vec3 control_moment_body_nm{};
 };
 
 struct SimulationResult {
