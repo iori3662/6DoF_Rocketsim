@@ -1,10 +1,9 @@
+#include "hrocket/dispersion.hpp"
 #include "hrocket/io.hpp"
 #include "hrocket/simulator.hpp"
 
-#include <algorithm>
 #include <filesystem>
 #include <iostream>
-#include <random>
 #include <stdexcept>
 #include <string>
 
@@ -20,7 +19,7 @@ std::string arg_value(int argc, char** argv, const std::string& name, const std:
 }
 
 void usage() {
-    std::cout << "Usage: hrocket_cli --vehicle vehicle.csv --thrust thrust.csv --wind wind.csv --out output_dir [--dt 0.01] [--max-time 180] [--descent freefall|parachute] [--wind-mode nominal|calm] [--dispersion 100] [--wind-sigma 2.0] [--seed 1]\n";
+    std::cout << "Usage: hrocket_cli --vehicle vehicle.csv --thrust thrust.csv --wind wind.csv --out output_dir [--dt 0.01] [--max-time 180] [--descent freefall|parachute] [--wind-mode nominal|calm] [--dispersion-mode montecarlo|wind-sweep] [--dispersion 100] [--wind-sigma 2.0] [--seed 1] [--sweep-max-wind 7] [--sweep-step 1] [--sweep-directions 16]\n";
 }
 
 hrocket::DescentMode parse_descent_mode(const std::string& value) {
@@ -43,20 +42,14 @@ hrocket::WindMode parse_wind_mode(const std::string& value) {
     throw std::runtime_error("invalid --wind-mode value: " + value);
 }
 
-hrocket::DispersionPoint summarize(int run_index, const hrocket::SimulationResult& result) {
-    hrocket::DispersionPoint point;
-    point.run_index = run_index;
-    point.impacted = result.impacted;
-    for (const auto& p : result.points) {
-        point.apogee_m = std::max(point.apogee_m, p.altitude_m);
+hrocket::DispersionMode parse_dispersion_mode(const std::string& value) {
+    if (value == "montecarlo") {
+        return hrocket::DispersionMode::MonteCarlo;
     }
-    if (!result.points.empty()) {
-        const auto& last = result.points.back();
-        point.impact_north_m = last.state.position_ned_m.x;
-        point.impact_east_m = last.state.position_ned_m.y;
-        point.flight_time_s = last.state.t_s;
+    if (value == "wind-sweep") {
+        return hrocket::DispersionMode::WindSweep;
     }
-    return point;
+    throw std::runtime_error("invalid --dispersion-mode value: " + value);
 }
 
 } // namespace
@@ -84,31 +77,21 @@ int main(int argc, char** argv) {
         }
         inputs.config.descent_mode = parse_descent_mode(arg_value(argc, argv, "--descent", "freefall"));
         inputs.config.wind_mode = parse_wind_mode(arg_value(argc, argv, "--wind-mode", "nominal"));
-        const int dispersion_runs = std::max(1, std::stoi(arg_value(argc, argv, "--dispersion", "1")));
-        const double wind_sigma = std::stod(arg_value(argc, argv, "--wind-sigma", "0.0"));
-        const unsigned seed = static_cast<unsigned>(std::stoul(arg_value(argc, argv, "--seed", "1")));
+        hrocket::DispersionConfig dispersion_config;
+        dispersion_config.mode = parse_dispersion_mode(arg_value(argc, argv, "--dispersion-mode", "montecarlo"));
+        dispersion_config.runs = std::max(1, std::stoi(arg_value(argc, argv, "--dispersion", "1")));
+        dispersion_config.wind_sigma_mps = std::stod(arg_value(argc, argv, "--wind-sigma", "0.0"));
+        dispersion_config.seed = static_cast<unsigned>(std::stoul(arg_value(argc, argv, "--seed", "1")));
+        dispersion_config.sweep_max_wind_mps = std::stod(arg_value(argc, argv, "--sweep-max-wind", "7.0"));
+        dispersion_config.sweep_step_mps = std::stod(arg_value(argc, argv, "--sweep-step", "1.0"));
+        dispersion_config.sweep_directions = std::max(1, std::stoi(arg_value(argc, argv, "--sweep-directions", "16")));
 
         std::filesystem::create_directories(out_dir);
         const auto result = hrocket::run_simulation(inputs);
         hrocket::write_trajectory_csv(out_dir / "trajectory.csv", result, inputs.vehicle);
         hrocket::write_kml(out_dir / "trajectory.kml", result, inputs.vehicle);
         hrocket::write_summary_csv(out_dir / "summary.csv", result);
-        std::vector<hrocket::DispersionPoint> dispersion;
-        dispersion.push_back(summarize(0, result));
-        if (dispersion_runs > 1) {
-            std::mt19937 rng(seed);
-            std::normal_distribution<double> wind_error(0.0, wind_sigma);
-            for (int i = 1; i < dispersion_runs; ++i) {
-                auto varied = inputs;
-                const double dn = wind_error(rng);
-                const double de = wind_error(rng);
-                for (auto& sample : varied.wind.samples) {
-                    sample.wind_ned_mps.x += dn;
-                    sample.wind_ned_mps.y += de;
-                }
-                dispersion.push_back(summarize(i, hrocket::run_simulation(varied)));
-            }
-        }
+        const auto dispersion = hrocket::run_dispersion(inputs, result, dispersion_config);
         hrocket::write_dispersion_csv(out_dir / "dispersion.csv", dispersion);
         hrocket::write_graph_svgs(out_dir, result, dispersion);
 

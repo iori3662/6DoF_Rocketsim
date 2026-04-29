@@ -99,6 +99,21 @@ struct SimulationInputs {
     SimulationConfig config;
 };
 
+enum class DispersionMode {
+    MonteCarlo,
+    WindSweep,
+};
+
+struct DispersionConfig {
+    DispersionMode mode{DispersionMode::MonteCarlo};
+    int runs{1};
+    double wind_sigma_mps{0.0};
+    unsigned seed{1};
+    double sweep_max_wind_mps{7.0};
+    double sweep_step_mps{1.0};
+    int sweep_directions{16};
+};
+
 class IActuator {
 public:
     virtual ~IActuator() = default;

@@ -10,6 +10,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $sources = @(
     "src/barrowman.cpp",
     "src/csv.cpp",
+    "src/dispersion.cpp",
     "src/io.cpp",
     "src/simulator.cpp"
 )

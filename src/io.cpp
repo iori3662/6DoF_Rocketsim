@@ -291,9 +291,11 @@ void write_summary_csv(const std::filesystem::path& path, const SimulationResult
 
 void write_dispersion_csv(const std::filesystem::path& path, const std::vector<DispersionPoint>& points) {
     std::ofstream out(path);
-    out << "run_index,impact_north_m,impact_east_m,apogee_m,flight_time_s,impacted\n";
+    out << "run_index,wind_speed_mps,wind_direction_deg,wind_delta_north_mps,wind_delta_east_mps,impact_north_m,impact_east_m,apogee_m,flight_time_s,impacted\n";
     for (const auto& p : points) {
-        out << p.run_index << ',' << p.impact_north_m << ',' << p.impact_east_m << ','
+        out << p.run_index << ',' << p.wind_speed_mps << ',' << p.wind_direction_deg << ','
+            << p.wind_delta_north_mps << ',' << p.wind_delta_east_mps << ','
+            << p.impact_north_m << ',' << p.impact_east_m << ','
             << p.apogee_m << ',' << p.flight_time_s << ',' << (p.impacted ? 1 : 0) << '\n';
     }
 }

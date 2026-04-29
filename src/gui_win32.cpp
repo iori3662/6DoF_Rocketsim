@@ -1,12 +1,12 @@
 #ifdef _WIN32
 
+#include "hrocket/dispersion.hpp"
 #include "hrocket/io.hpp"
 #include "hrocket/simulator.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
-#include <random>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -23,6 +23,7 @@ constexpr int id_descent_parachute = 107;
 constexpr int id_wind_nominal = 108;
 constexpr int id_wind_calm = 109;
 constexpr int id_graph_combo = 110;
+constexpr int id_dispersion_combo = 111;
 
 HWND vehicle_edit{};
 HWND thrust_edit{};
@@ -31,12 +32,15 @@ HWND out_edit{};
 HWND dispersion_edit{};
 HWND wind_sigma_edit{};
 HWND seed_edit{};
+HWND sweep_max_wind_edit{};
+HWND sweep_directions_edit{};
 HWND status_text{};
 HWND descent_freefall_radio{};
 HWND descent_parachute_radio{};
 HWND wind_nominal_radio{};
 HWND wind_calm_radio{};
 HWND graph_combo{};
+HWND dispersion_combo{};
 HFONT ui_font{};
 HFONT title_font{};
 HBRUSH bg_brush{};
@@ -94,22 +98,6 @@ int get_int(HWND hwnd, int fallback) {
 
 void set_status(const std::wstring& text) {
     SetWindowTextW(status_text, text.c_str());
-}
-
-hrocket::DispersionPoint summarize(int run_index, const hrocket::SimulationResult& result) {
-    hrocket::DispersionPoint point;
-    point.run_index = run_index;
-    point.impacted = result.impacted;
-    for (const auto& p : result.points) {
-        point.apogee_m = std::max(point.apogee_m, p.altitude_m);
-    }
-    if (!result.points.empty()) {
-        const auto& last = result.points.back();
-        point.impact_north_m = last.state.position_ned_m.x;
-        point.impact_east_m = last.state.position_ned_m.y;
-        point.flight_time_s = last.state.t_s;
-    }
-    return point;
 }
 
 void choose_file(HWND owner, HWND edit) {
@@ -349,28 +337,21 @@ void run(HWND owner) {
             : hrocket::WindMode::Nominal;
 
         const int dispersion_runs = std::max(1, get_int(dispersion_edit, 1));
-        const double wind_sigma = get_double(wind_sigma_edit, 0.0);
-        const unsigned seed = static_cast<unsigned>(std::max(0, get_int(seed_edit, 1)));
+        hrocket::DispersionConfig dispersion_config;
+        dispersion_config.mode = SendMessageW(dispersion_combo, CB_GETCURSEL, 0, 0) == 1
+            ? hrocket::DispersionMode::WindSweep
+            : hrocket::DispersionMode::MonteCarlo;
+        dispersion_config.runs = dispersion_runs;
+        dispersion_config.wind_sigma_mps = get_double(wind_sigma_edit, 0.0);
+        dispersion_config.seed = static_cast<unsigned>(std::max(0, get_int(seed_edit, 1)));
+        dispersion_config.sweep_max_wind_mps = get_double(sweep_max_wind_edit, 7.0);
+        dispersion_config.sweep_step_mps = 1.0;
+        dispersion_config.sweep_directions = std::max(1, get_int(sweep_directions_edit, 16));
         const auto out_dir = std::filesystem::path(narrow(get_text(out_edit)));
 
         std::filesystem::create_directories(out_dir);
         last_result = hrocket::run_simulation(inputs);
-        last_dispersion.clear();
-        last_dispersion.push_back(summarize(0, last_result));
-        if (dispersion_runs > 1) {
-            std::mt19937 rng(seed);
-            std::normal_distribution<double> wind_error(0.0, wind_sigma);
-            for (int i = 1; i < dispersion_runs; ++i) {
-                auto varied = inputs;
-                const double dn = wind_error(rng);
-                const double de = wind_error(rng);
-                for (auto& sample : varied.wind.samples) {
-                    sample.wind_ned_mps.x += dn;
-                    sample.wind_ned_mps.y += de;
-                }
-                last_dispersion.push_back(summarize(i, hrocket::run_simulation(varied)));
-            }
-        }
+        last_dispersion = hrocket::run_dispersion(inputs, last_result, dispersion_config);
 
         hrocket::write_trajectory_csv(out_dir / "trajectory.csv", last_result, inputs.vehicle);
         hrocket::write_kml(out_dir / "trajectory.kml", last_result, inputs.vehicle);
@@ -431,7 +412,18 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         add_label(hwnd, L"Seed", 398, 302, 42);
         seed_edit = add_edit(hwnd, 444, 299, 90, L"1");
 
-        add_button(hwnd, L"Run Simulation", 36, 348, 498, 36, id_run);
+        add_label(hwnd, L"Dispersion", 36, 342);
+        dispersion_combo = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, 128, 339, 152, 200, hwnd, reinterpret_cast<HMENU>(id_dispersion_combo), nullptr, nullptr);
+        SendMessageW(dispersion_combo, WM_SETFONT, reinterpret_cast<WPARAM>(ui_font), TRUE);
+        SendMessageW(dispersion_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Monte Carlo"));
+        SendMessageW(dispersion_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Wind sweep"));
+        SendMessageW(dispersion_combo, CB_SETCURSEL, 0, 0);
+        add_label(hwnd, L"Max wind", 296, 342, 70);
+        sweep_max_wind_edit = add_edit(hwnd, 370, 339, 54, L"7");
+        add_label(hwnd, L"Dirs", 438, 342, 38);
+        sweep_directions_edit = add_edit(hwnd, 480, 339, 54, L"16");
+
+        add_button(hwnd, L"Run Simulation", 36, 388, 498, 36, id_run);
 
         graph_combo = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, 592, 75, 260, 200, hwnd, reinterpret_cast<HMENU>(id_graph_combo), nullptr, nullptr);
         SendMessageW(graph_combo, WM_SETFONT, reinterpret_cast<WPARAM>(ui_font), TRUE);
@@ -491,7 +483,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         RECT sub{32, 48, 1120, 72};
         draw_text(dc, L"Local C++ solver with CSV/KML output, SVG graphs, and Monte Carlo impact dispersion.", sub, muted_color, ui_font);
 
-        round_rect(dc, {24, 64, 552, 402}, 20, panel_color, border_color);
+        round_rect(dc, {24, 64, 552, 444}, 20, panel_color, border_color);
         round_rect(dc, {576, 64, 1156, 640}, 20, panel_color, border_color);
         draw_graph(dc, {600, 116, 1132, 618});
         EndPaint(hwnd, &ps);

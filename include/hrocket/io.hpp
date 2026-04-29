@@ -16,6 +16,10 @@ void write_summary_csv(const std::filesystem::path& path, const SimulationResult
 
 struct DispersionPoint {
     int run_index{};
+    double wind_speed_mps{};
+    double wind_direction_deg{};
+    double wind_delta_north_mps{};
+    double wind_delta_east_mps{};
     double impact_north_m{};
     double impact_east_m{};
     double apogee_m{};

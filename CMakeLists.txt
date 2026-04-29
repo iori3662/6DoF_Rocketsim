@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(hrocket_core
     src/barrowman.cpp
     src/csv.cpp
+    src/dispersion.cpp
     src/io.cpp
     src/simulator.cpp
 )
