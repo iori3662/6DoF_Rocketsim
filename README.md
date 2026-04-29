@@ -83,7 +83,7 @@ GUIでは以下を選択できます。
 - 高度 / 速度 / 推力
 - 姿勢
 - 速度成分
-- 2枚可動尾翼制御
+- 可動尾翼制御
 - 落下分散
 
 同じグラフはSVGとして出力フォルダにも保存されます。
@@ -96,21 +96,31 @@ SVGグラフには軸目盛りと数値ラベルが含まれます。
 `samples/vehicle.csv` を参照してください。基本形式は `key,value` です。
 パラシュート諸元も同じCSVに `parachute_area_m2`、`parachute_cd`、`parachute_deploy_altitude_m` として入力します。
 
-2枚可動尾翼による姿勢制御も同じCSVで設定します。`reference/control_model.jpg` のように機軸に対して対称に取り付けられた2枚翼を想定し、2枚を同じ舵角で動かして1軸の姿勢モーメントを発生させます。ランチャ離脱後かつ指定対気速度以上でPD制御を有効にします。
-設定例は `samples/vehicle_control_symmetric.csv` です。
+可動尾翼による姿勢制御も同じCSVで設定します。ランチャ離脱後かつ指定対気速度以上でPD制御を有効にします。
+
+- `control_fin_count,2`: `reference/control_model.jpg` のように機軸に対して対称に取り付けられた2枚翼を想定し、ロール制御のみを行います。
+- `control_fin_count,4`: 4枚翼を想定し、ロール・ピッチ・ヨー制御を行います。
+
+設定例は `samples/vehicle_control_symmetric.csv` と `samples/vehicle_control_4fin.csv` です。
 
 主な設定項目:
 
 - `control_enabled`
-- `control_axis` (`0`: pitch軸, `1`: yaw軸)
+- `control_fin_count`
 - `control_tail_area_m2`
 - `control_tail_lift_slope_per_rad`
 - `control_tail_distance_from_nose_m`
 - `control_max_deflection_deg`
 - `control_min_speed_mps`
-- `control_target_angle_deg`
-- `control_kp`
-- `control_kd`
+- `control_roll_target_deg`
+- `control_pitch_target_deg`
+- `control_yaw_target_deg`
+- `control_roll_kp`
+- `control_roll_kd`
+- `control_pitch_kp`
+- `control_pitch_kd`
+- `control_yaw_kp`
+- `control_yaw_kd`
 
 ### 推力履歴
 

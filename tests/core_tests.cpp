@@ -34,14 +34,23 @@ int main() {
     assert(parachute_result.points.back().state.t_s >= result.points.back().state.t_s);
 
     inputs.vehicle.control_enabled = 1.0;
-    inputs.vehicle.control_target_angle_deg = 0.0;
+    inputs.vehicle.control_fin_count = 2.0;
+    inputs.vehicle.control_roll_target_deg = 0.0;
     const auto controlled_result = hrocket::run_simulation(inputs);
-    bool saw_control = false;
     for (const auto& p : controlled_result.points) {
-        saw_control = saw_control || std::abs(p.control_deflection_deg) > 0.0;
-        assert(std::abs(p.control_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+        assert(std::abs(p.control_roll_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+        assert(std::abs(p.control_pitch_deflection_deg) <= 1.0e-9);
+        assert(std::abs(p.control_yaw_deflection_deg) <= 1.0e-9);
     }
-    assert(saw_control);
+
+    inputs.vehicle.control_fin_count = 4.0;
+    const auto four_fin_result = hrocket::run_simulation(inputs);
+    assert(!four_fin_result.points.empty());
+    for (const auto& p : four_fin_result.points) {
+        assert(std::abs(p.control_roll_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+        assert(std::abs(p.control_pitch_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+        assert(std::abs(p.control_yaw_deflection_deg) <= inputs.vehicle.control_max_deflection_deg + 1.0e-9);
+    }
     std::cout << "ok\n";
     return 0;
 }
